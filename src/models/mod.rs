@@ -3,6 +3,10 @@
 use serde::{Serialize, Deserialize};
 use sqlx::types::Uuid;
 
+pub mod prelude {
+    pub use super::*;
+}
+
 /// A new question received from a request.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NewQuestion {
@@ -50,4 +54,13 @@ pub struct Answer {
     likes: u32,
     /// The timestamp the answer was created at as a string
     created_at: String
+}
+
+/// A struct that acts as a wrapper for all entity ID's in the models module.
+pub struct EntityId {
+    id: String,
+}
+
+pub enum DbError {
+
 }
