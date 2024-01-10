@@ -1,8 +1,11 @@
 //! Contains the structs that model the databases.
 
+use std::convert::TryInto;
 use serde::{Serialize, Deserialize};
 use sqlx::types::Uuid;
+// use sqlx::uuid
 use sqlx::error::Error;
+
 
 pub mod prelude {
     pub use super::*;
@@ -27,14 +30,23 @@ pub struct Question {
     /// The content of the question
     question: String,
     /// The number of likes the question has received
-    likes: u32,
+    likes: i32,
     /// The timestamp as a string the question was created
     created_at: String,
     // tags: Vec<Option<>>
 }
 
 impl Question {
-    pub fn new() -> QuestionBuilder {
+    pub fn new(id: Uuid, title: String, question: String, likes: i32, created_at: String) -> Self {
+        Self {
+            id,
+            title,
+            question,
+            likes,
+            created_at
+        }
+    }
+    pub fn builder() -> QuestionBuilder {
         QuestionBuilder::new()
     }
 }
@@ -43,7 +55,7 @@ pub struct QuestionBuilder {
     id: Option<Uuid>,
     title: Option<String>,
     question: Option<String>,
-    likes: Option<u32>,
+    likes: Option<i32>,
     created_at: Option<String>,
 }
 
@@ -87,6 +99,15 @@ pub struct Answer {
 pub struct EntityId {
     id: String,
 }
+
+impl TryInto<Uuid> for EntityId {
+    type Error = &'static str;
+    fn try_into(self) -> Result<Uuid, Self::Error> {
+        Uuid::parse_str(self.id.as_str()).map_err(|_| "unable to parse as uuid")
+    }
+}
+
+
 
 pub enum DbError {
     Creation(Error),

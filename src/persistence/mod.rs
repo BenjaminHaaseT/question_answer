@@ -1,6 +1,7 @@
 //! Contains the trait needed for implementing a database access object as well
 //! as implementations.
 
+use std::convert::TryInto;
 use sqlx::PgPool;
 use sqlx::postgres::PgRow;
 use sqlx::Row;
@@ -140,15 +141,16 @@ impl QuestionDao for QuestionDaoImpl {
     }
 
     async fn get_question(&self, question_id: EntityId) -> Result<Question, DbError> {
+        let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
         sqlx::query("SELECT * FROM questions WHERE id = $1")
-            .bind(question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?)
-            .map(|row: PgRow| Question {
-                id: row.get("id"),
-                title: row.get("title"),
-                question: row.get("question"),
-                likes: row.get("likes"),
-                created_at: row.get("created_at"),
-            })
+            .bind(question_id)
+            .map(|row: PgRow| Question::new(
+                row.get("id"),
+                row.get("title"),
+                row.get("question"),
+                row.get("likes"),
+                row.get("created_at")
+            ))
             .fetch_one(&self.pool)
             .await
             .map_err(|e| DbError::NotFound(e))
