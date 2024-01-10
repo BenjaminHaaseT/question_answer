@@ -1,11 +1,15 @@
 //! Contains the trait needed for implementing a database access object as well
 //! as implementations.
 
+use sqlx::PgPool;
+use sqlx::postgres::PgRow;
+use sqlx::Row;
 use sqlx::types::Uuid;
 use crate::models::prelude::*;
 
 /// The interface for any database access object that will interact with the the questions database.
 pub trait QuestionDao {
+    /// # Required Method
     /// Creates a new question and inserts it into the database.
     ///
     /// # Parameters
@@ -14,8 +18,9 @@ pub trait QuestionDao {
     /// # Returns
     /// A `Result<Uuid, DbError>`, if the question was created successfully a `Ok(Uuid)` will be returned
     /// where the `Uuid` represents the id of the newly created question, otherwise `Err(DbError)` will be returned.
-    async fn create_question(new_question: NewQuestion) -> Result<Uuid, DbError>;
+    async fn create_question(&self, new_question: NewQuestion) -> Result<Uuid, DbError>;
 
+    /// # Required Method
     /// Gets a question from the database if present.
     ///
     /// # Parameters
@@ -23,14 +28,16 @@ pub trait QuestionDao {
     ///
     ///# Returns
     /// A `Result<Question, DbError>`, a `Ok(Question)` if the query is successful, otherwise `Err(DbError)`.
-    async fn get_question(question_id: EntityId) -> Result<Question, DbError>;
+    async fn get_question(&self, question_id: EntityId) -> Result<Question, DbError>;
 
+    /// # Required Method
     /// Gets a `Vec` of all questions in the database
     ///
     /// # Returns
     /// A `Result<Vec<Question>>, DbError>`, in the success case `Ok(Vec<Question>)`, otherwise `Err(DbError)`.
-    async fn get_questions() -> Result<Vec<Question>, DbError>;
+    async fn get_questions(&self, ) -> Result<Vec<Question>, DbError>;
 
+    /// # Required Method
     /// Deletes a question from the database.
     ///
     /// # Parameters
@@ -39,8 +46,9 @@ pub trait QuestionDao {
     /// # Returns
     /// A `Result<Uuid, DbError>`, if the question is successfully deleted then a `Ok(Uuid)` will be returned,
     /// otherwise an `Err(DbError)` is returned.
-    async fn delete_question(question_id: EntityId) -> Result<Uuid, DbError>;
+    async fn delete_question(&self, question_id: EntityId) -> Result<Uuid, DbError>;
 
+    /// # Required Method
     /// Increments the number of likes associated with a particular question
     ///
     /// # Parameters
@@ -49,11 +57,12 @@ pub trait QuestionDao {
     /// # Returns
     /// A `Result<(), DbError>`, `Ok(())` in the successful case and `Err(DbError)` in the
     /// unsuccessful case.
-    async fn increment_question_likes(question_id: EntityId) -> Result<(), DbError>;
+    async fn increment_question_likes(&self, question_id: EntityId) -> Result<(), DbError>;
 }
 
 /// The interface for any database access object that will interact with the answers database.
 pub trait AnswerDao {
+    /// # Required Method
     /// Creates a new answer for a particular question and inserts it into the database.
     ///
     /// # Parameters
@@ -63,8 +72,9 @@ pub trait AnswerDao {
     /// # Returns
     /// A `Result<Uuid, DbError>`, if the answer was created successfully a `Ok(Uuid)` will be returned
     /// where the `Uuid` represents the id of the newly created answer, otherwise `Err(DbError)` will be returned.
-    async fn create_answer(question_id: EntityId, new_answer: NewAnswer) -> Result<Uuid, DbError>;
+    async fn create_answer(&self, question_id: EntityId, new_answer: NewAnswer) -> Result<Uuid, DbError>;
 
+    /// # Required Method
     /// Gets an answer from the database if present
     ///
     /// # Parameters
@@ -72,8 +82,9 @@ pub trait AnswerDao {
     ///
     ///# Returns
     /// A `Result<Answer, DbError>`, a `Ok(Question)` if the query is successful, otherwise `Err(DbError)`.
-    async fn get_answer(answer_id: EntityId) -> Result<Answer, DbError>;
+    async fn get_answer(&self, answer_id: EntityId) -> Result<Answer, DbError>;
 
+    /// # Required Method
     /// Gets a `Vec` of all answers in the database associated with a particular question.
     ///
     /// # Parameters
@@ -81,14 +92,16 @@ pub trait AnswerDao {
     ///
     /// # Returns
     /// A `Result<Vec<Answer>>, DbError>`, in the success case `Ok(Vec<Answer>)`, otherwise `Err(DbError)`.
-    async fn get_answers(question_id: EntityId) -> Result<Vec<Answer>, DbError>;
+    async fn get_answers(&self, question_id: EntityId) -> Result<Vec<Answer>, DbError>;
 
+    /// # Required Method
     /// Gets a `Vec` of all answers in the database
     ///
     /// # Returns
     /// A `Result<Vec<Answer>>, DbError>`, in the success case `Ok(Vec<Question>)`, otherwise `Err(DbError)`.
-    async fn get_all_answers() -> Result<Vec<Answer>, DbError>;
+    async fn get_all_answers(&self) -> Result<Vec<Answer>, DbError>;
 
+    /// # Required Method
     /// Deletes an answer from the database.
     ///
     /// # Parameters
@@ -97,8 +110,9 @@ pub trait AnswerDao {
     /// # Returns
     /// A `Result<Uuid, DbError>`, if the answer is successfully deleted then a `Ok(Uuid)` will be returned,
     /// otherwise an `Err(DbError)` is returned.
-    async fn delete_answer(answer_id: EntityId) -> Result<Uuid, DbError>;
+    async fn delete_answer(&self, answer_id: EntityId) -> Result<Uuid, DbError>;
 
+    /// # Required Method
     /// Increments the number of likes associated with a particular answer.
     ///
     /// # Parameters
@@ -107,7 +121,49 @@ pub trait AnswerDao {
     /// # Returns
     /// A `Result<(), DbError>`, `Ok(())` in the successful case and `Err(DbError)` in the
     /// unsuccessful case.
-    async fn increment_answer_likes(answer_id: EntityId) -> Result<(), DbError>;
+    async fn increment_answer_likes(&self, answer_id: EntityId) -> Result<(), DbError>;
+}
 
+pub struct QuestionDaoImpl {
+    pool: PgPool,
+}
+
+impl QuestionDao for QuestionDaoImpl {
+    async fn create_question(&self, new_question: NewQuestion) -> Result<Uuid, DbError> {
+        sqlx::query("INSERT INTO questions (title, question) VALUES ($1, $2) returning id")
+            .bind(new_question.title)
+            .bind(new_question.question)
+            .map(|row: PgRow| -> Uuid { row.get("id") })
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| DbError::Creation(e))
+    }
+
+    async fn get_question(&self, question_id: EntityId) -> Result<Question, DbError> {
+        sqlx::query("SELECT * FROM questions WHERE id = $1")
+            .bind(question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?)
+            .map(|row: PgRow| Question {
+                id: row.get("id"),
+                title: row.get("title"),
+                question: row.get("question"),
+                likes: row.get("likes"),
+                created_at: row.get("created_at"),
+            })
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| DbError::NotFound(e))
+    }
+
+    async fn get_questions(&self) -> Result<Vec<Question>, DbError> {
+        todo!()
+    }
+
+    async fn delete_question(&self, question_id: EntityId) -> Result<Uuid, DbError> {
+        todo!()
+    }
+
+    async fn increment_question_likes(&self, question_id: EntityId) -> Result<(), DbError> {
+        todo!()
+    }
 }
 

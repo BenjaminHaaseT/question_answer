@@ -2,6 +2,7 @@
 
 use serde::{Serialize, Deserialize};
 use sqlx::types::Uuid;
+use sqlx::error::Error;
 
 pub mod prelude {
     pub use super::*;
@@ -30,6 +31,32 @@ pub struct Question {
     /// The timestamp as a string the question was created
     created_at: String,
     // tags: Vec<Option<>>
+}
+
+impl Question {
+    pub fn new() -> QuestionBuilder {
+        QuestionBuilder::new()
+    }
+}
+
+pub struct QuestionBuilder {
+    id: Option<Uuid>,
+    title: Option<String>,
+    question: Option<String>,
+    likes: Option<u32>,
+    created_at: Option<String>,
+}
+
+impl QuestionBuilder {
+    fn new() -> Self {
+        QuestionBuilder {
+            id: None,
+            title: None,
+            question: None,
+            likes: None,
+            created_at: None,
+        }
+    }
 }
 
 /// A new answer to an associated question received from a request.
@@ -62,5 +89,7 @@ pub struct EntityId {
 }
 
 pub enum DbError {
-
+    Creation(Error),
+    NotFound(Error),
+    InvalidUuid(&'static str),
 }
