@@ -3,8 +3,11 @@
 use std::convert::TryInto;
 use serde::{Serialize, Deserialize};
 use sqlx::types::Uuid;
+use sqlx::FromRow;
 // use sqlx::uuid
 use sqlx::error::Error;
+use chrono::{DateTime, Utc};
+
 
 
 pub mod prelude {
@@ -21,7 +24,7 @@ pub struct NewQuestion {
 }
 
 /// A question that has been successfully persisted in the database.
-#[derive(Debug)]
+#[derive(Debug, Serialize, FromRow)]
 pub struct Question {
     /// The unique id of the question
     id: Uuid,
@@ -32,12 +35,12 @@ pub struct Question {
     /// The number of likes the question has received
     likes: i32,
     /// The timestamp as a string the question was created
-    created_at: String,
+    created_at: DateTime<Utc>,
     // tags: Vec<Option<>>
 }
 
 impl Question {
-    pub fn new(id: Uuid, title: String, question: String, likes: i32, created_at: String) -> Self {
+    pub fn new(id: Uuid, title: String, question: String, likes: i32, created_at: DateTime<Utc>) -> Self {
         Self {
             id,
             title,
@@ -56,7 +59,7 @@ pub struct QuestionBuilder {
     title: Option<String>,
     question: Option<String>,
     likes: Option<i32>,
-    created_at: Option<String>,
+    created_at: Option<DateTime<Utc>>,
 }
 
 impl QuestionBuilder {
@@ -81,7 +84,7 @@ pub struct NewAnswer {
 }
 
 /// An answer that has been successfully persisted in the database.
-#[derive(Debug)]
+#[derive(Debug, Serialize, FromRow)]
 pub struct Answer {
     /// The unique id of the answer
     id: Uuid,
@@ -92,7 +95,7 @@ pub struct Answer {
     /// The number of likes the answer has received
     likes: u32,
     /// The timestamp the answer was created at as a string
-    created_at: String
+    created_at: DateTime<Utc>
 }
 
 /// A struct that acts as a wrapper for all entity ID's in the models module.
@@ -113,4 +116,7 @@ pub enum DbError {
     Creation(Error),
     NotFound(Error),
     InvalidUuid(&'static str),
+    Access(Error),
+    FromRow(Error),
+    Deletion(Error),
 }

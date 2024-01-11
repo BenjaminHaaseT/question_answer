@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use sqlx::postgres::PgRow;
 use sqlx::Row;
 use sqlx::types::Uuid;
+use sqlx::FromRow;
 use crate::models::prelude::*;
 
 /// The interface for any database access object that will interact with the the questions database.
@@ -142,30 +143,74 @@ impl QuestionDao for QuestionDaoImpl {
 
     async fn get_question(&self, question_id: EntityId) -> Result<Question, DbError> {
         let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
-        sqlx::query("SELECT * FROM questions WHERE id = $1")
+        // sqlx::query("SELECT * FROM questions WHERE id = $1")
+        //     .bind(question_id)
+        //     .map(|row: PgRow| Question::new(
+        //         row.get("id"),
+        //         row.get("title"),
+        //         row.get("question"),
+        //         row.get("likes"),
+        //         row.get("created_at")
+        //     ))
+        //     .fetch_one(&self.pool)
+        //     .await
+        //     .map_err(|e| DbError::NotFound(e))
+        sqlx::query_as::<_, Question>("SELECT * FROM questions WHERE id = $1")
             .bind(question_id)
-            .map(|row: PgRow| Question::new(
-                row.get("id"),
-                row.get("title"),
-                row.get("question"),
-                row.get("likes"),
-                row.get("created_at")
-            ))
             .fetch_one(&self.pool)
             .await
             .map_err(|e| DbError::NotFound(e))
     }
 
     async fn get_questions(&self) -> Result<Vec<Question>, DbError> {
-        todo!()
+        // sqlx::query("SELECT * FROM questions")
+        //     .map(|row: PgRow| )
+        //     .fetch_all(&self.pool)
+        //     .await
+        //     .map_err(|e| DbError::Access(e))
+        sqlx::query("SELECT * FROM questions")
+            .map(|row| Question::from_row(&row).map_err(|e| DbError::FromRow(e)))
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| DbError::Access(e))?
+            .into_iter()
+            .collect::<Result<Vec<Question>, DbError>>()
+
     }
 
     async fn delete_question(&self, question_id: EntityId) -> Result<Uuid, DbError> {
-        todo!()
+        let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
+        match sqlx::query("DELETE FROM questions WHERE id = $1")
+            .bind(question_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DbError::Deletion(e))
+        {
+            Ok(_) => Ok(question_id),
+            Err(e) => Err(e)
+        }
     }
 
     async fn increment_question_likes(&self, question_id: EntityId) -> Result<(), DbError> {
-        todo!()
+        let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
+        // Ensure that both transactions occur by using a Transaction
+        let mut tx = self.pool.begin().await.map_err(|e| DbError::Access(e))?;
+        let likes = sqlx::query("SELECT likes FROM questions WHERE id = $1")
+            .bind(question_id)
+            .map(|row: PgRow| row.get::<i32, &str>("id"))
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| DbError::Access(e))?;
+        match sqlx::query("UPDATE questions SET likes = $1 WHERE id = $2")
+            .bind(likes + 1)
+            .bind(question_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| DbError::Access(e))
+        {
+            Ok(_) => tx.commit().await.map_err(|e| DbError::Access(e)),
+            Err(e) => Err(e)
+        }
     }
 }
 
