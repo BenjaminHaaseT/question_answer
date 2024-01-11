@@ -143,18 +143,6 @@ impl QuestionDao for QuestionDaoImpl {
 
     async fn get_question(&self, question_id: EntityId) -> Result<Question, DbError> {
         let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
-        // sqlx::query("SELECT * FROM questions WHERE id = $1")
-        //     .bind(question_id)
-        //     .map(|row: PgRow| Question::new(
-        //         row.get("id"),
-        //         row.get("title"),
-        //         row.get("question"),
-        //         row.get("likes"),
-        //         row.get("created_at")
-        //     ))
-        //     .fetch_one(&self.pool)
-        //     .await
-        //     .map_err(|e| DbError::NotFound(e))
         sqlx::query_as::<_, Question>("SELECT * FROM questions WHERE id = $1")
             .bind(question_id)
             .fetch_one(&self.pool)
@@ -163,11 +151,6 @@ impl QuestionDao for QuestionDaoImpl {
     }
 
     async fn get_questions(&self) -> Result<Vec<Question>, DbError> {
-        // sqlx::query("SELECT * FROM questions")
-        //     .map(|row: PgRow| )
-        //     .fetch_all(&self.pool)
-        //     .await
-        //     .map_err(|e| DbError::Access(e))
         sqlx::query("SELECT * FROM questions")
             .map(|row| Question::from_row(&row).map_err(|e| DbError::FromRow(e)))
             .fetch_all(&self.pool)
