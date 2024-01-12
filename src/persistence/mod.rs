@@ -141,6 +141,7 @@ impl QuestionDao for QuestionDaoImpl {
     }
 
     async fn get_question(&self, question_id: EntityId) -> Result<Question, DbError> {
+        // Attempt to parse entity id
         let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
         sqlx::query_as::<_, Question>("SELECT * FROM questions WHERE id = $1")
             .bind(question_id)
@@ -161,6 +162,7 @@ impl QuestionDao for QuestionDaoImpl {
     }
 
     async fn delete_question(&self, question_id: EntityId) -> Result<Uuid, DbError> {
+        // Attempt to parse entity id
         let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
         match sqlx::query("DELETE FROM questions WHERE id = $1")
             .bind(question_id)
@@ -174,6 +176,7 @@ impl QuestionDao for QuestionDaoImpl {
     }
 
     async fn increment_question_likes(&self, question_id: EntityId) -> Result<(), DbError> {
+        // Attempt to parse entity id
         let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
         // Ensure that both transactions occur by using a Transaction
         let mut tx = self.pool.begin().await.map_err(|e| DbError::Access(e))?;
@@ -190,7 +193,7 @@ impl QuestionDao for QuestionDaoImpl {
             .await
             .map_err(|e| DbError::Access(e))
         {
-            Ok(_) => tx.commit().await.map_err(|e| DbError::Access(e)),
+            Ok(_) => tx.commit().await.map_err(|e| DbError::Commit(e)),
             Err(e) => Err(e)
         }
     }
@@ -281,12 +284,7 @@ impl AnswerDao for AnswerDaoImpl {
             .await
             .map_err(|e| DbError::Update(e))
         {
-            Ok(_) => {
-                // commit the transactions
-                tx.commit()
-                    .await
-                    .map_err(|e| DbError::Commit(e))
-            },
+            Ok(_) => tx.commit().await.map_err(|e| DbError::Commit(e))
             Err(e) => Err(e)
         }
 
