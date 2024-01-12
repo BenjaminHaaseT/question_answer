@@ -284,7 +284,7 @@ impl AnswerDao for AnswerDaoImpl {
             .await
             .map_err(|e| DbError::Update(e))
         {
-            Ok(_) => tx.commit().await.map_err(|e| DbError::Commit(e))
+            Ok(_) => tx.commit().await.map_err(|e| DbError::Commit(e)),
             Err(e) => Err(e)
         }
 
