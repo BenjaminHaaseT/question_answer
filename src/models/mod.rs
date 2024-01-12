@@ -93,7 +93,7 @@ pub struct Answer {
     /// The content of the answer
     answer: String,
     /// The number of likes the answer has received
-    likes: u32,
+    likes: i32,
     /// The timestamp the answer was created at as a string
     created_at: DateTime<Utc>
 }
@@ -119,4 +119,6 @@ pub enum DbError {
     Access(Error),
     FromRow(Error),
     Deletion(Error),
+    Update(Error),
+    Commit(Error),
 }

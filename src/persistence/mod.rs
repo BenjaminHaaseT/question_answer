@@ -68,13 +68,12 @@ pub trait AnswerDao {
     /// Creates a new answer for a particular question and inserts it into the database.
     ///
     /// # Parameters
-    /// `question_id`: The `EntityId` of the new answer is attempting to respond to
     /// `new_answer`: The `NewAnswer` containing the content of the answer to be inserted into the database
     ///
     /// # Returns
     /// A `Result<Uuid, DbError>`, if the answer was created successfully a `Ok(Uuid)` will be returned
     /// where the `Uuid` represents the id of the newly created answer, otherwise `Err(DbError)` will be returned.
-    async fn create_answer(&self, question_id: EntityId, new_answer: NewAnswer) -> Result<Uuid, DbError>;
+    async fn create_answer(&self, new_answer: NewAnswer) -> Result<Uuid, DbError>;
 
     /// # Required Method
     /// Gets an answer from the database if present
@@ -194,6 +193,103 @@ impl QuestionDao for QuestionDaoImpl {
             Ok(_) => tx.commit().await.map_err(|e| DbError::Access(e)),
             Err(e) => Err(e)
         }
+    }
+}
+
+pub struct AnswerDaoImpl {
+    pool: PgPool,
+}
+
+impl AnswerDao for AnswerDaoImpl {
+    async fn create_answer(&self, new_answer: NewAnswer) -> Result<Uuid, DbError> {
+        // First parse question_id
+        let question_id: Uuid = Uuid::parse_str(new_answer.question_id.as_str()).map_err(|_| DbError::InvalidUuid("invalid uuid"))?;
+        // Attempt to insert a new answer into the database
+        sqlx::query("INSERT INTO answers (question_id, answer) VALUES ($1, $2) returning id")
+            .bind(question_id)
+            .bind(new_answer.answer)
+            .map(|row| -> Uuid { row.get("id") })
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| DbError::Creation(e))
+    }
+
+    async fn get_answer(&self, answer_id: EntityId) -> Result<Answer, DbError> {
+        // Parse answer id
+        let answer_id: Uuid = answer_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
+        // attempt to read answer from database
+        sqlx::query_as::<_, Answer>("SELECT * FROM answers WHERE id = $1")
+            .bind(answer_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| DbError::Access(e))
+    }
+
+    async fn get_answers(&self, question_id: EntityId) -> Result<Vec<Answer>, DbError> {
+        // Parse entity id first
+        let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
+        // Attempt to read all associated answers from database
+        sqlx::query("SELECT * FROM answers WHERE question_id = $1")
+            .bind(question_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| DbError::Access(e))?
+            .into_iter()
+            .map(|row| Answer::from_row(&row).map_err(|e| DbError::FromRow(e)))
+            .collect::<Result<Vec<Answer>, DbError>>()
+    }
+
+    async fn delete_answer(&self, answer_id: EntityId) -> Result<Uuid, DbError> {
+        // Parse entity id
+        let answer_id: Uuid = answer_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
+        // Attempt to execute query
+        match sqlx::query("DELETE * FROM answers WHERE id = $1")
+            .bind(answer_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DbError::Access(e))
+        {
+            Ok(_) => Ok(answer_id),
+            Err(e) => Err(e)
+        }
+    }
+
+    async fn get_all_answers(&self) -> Result<Vec<Answer>, DbError> {
+        // Execute query
+        sqlx::query_as::<_, Answer>("SELECT * FROM answers")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| DbError::Access(e))
+    }
+
+    async fn increment_answer_likes(&self, answer_id: EntityId) -> Result<(), DbError> {
+        // Parse entity id
+        let answer_id: Uuid = answer_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
+        // Attempt to execute query, use a transaction
+        let mut tx = self.pool.begin().await.map_err(|e| DbError::Access(e))?;
+        let likes = sqlx::query("SELECT likes FROM answers WHERE id = $1")
+            .bind(answer_id)
+            .map(|row| row.get::<i32, &str>("id"))
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| DbError::NotFound(e))?;
+        // Attempt to update database
+        match sqlx::query("UPDATE answers SET likes = $1 WHERE id = $2")
+            .bind(likes + 1)
+            .bind(answer_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| DbError::Update(e))
+        {
+            Ok(_) => {
+                // commit the transactions
+                tx.commit()
+                    .await
+                    .map_err(|e| DbError::Commit(e))
+            },
+            Err(e) => Err(e)
+        }
+
     }
 }
 
