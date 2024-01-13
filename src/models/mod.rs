@@ -53,6 +53,10 @@ impl Question {
     pub fn builder() -> QuestionBuilder {
         QuestionBuilder::new()
     }
+
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
 }
 
 pub struct QuestionBuilder {
@@ -102,6 +106,12 @@ pub struct Answer {
 /// A struct that acts as a wrapper for all entity ID's in the models module.
 pub struct EntityId {
     id: String,
+}
+
+impl EntityId {
+    pub fn new(id: String) -> Self {
+        Self { id }
+    }
 }
 
 impl TryInto<Uuid> for EntityId {

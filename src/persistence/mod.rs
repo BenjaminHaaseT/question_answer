@@ -171,19 +171,31 @@ impl QuestionDao for QuestionDaoImpl {
             .map_err(|e| DbError::Access(e))?
             .into_iter()
             .collect::<Result<Vec<Question>, DbError>>()
-
     }
 
     async fn delete_question(&self, question_id: EntityId) -> Result<Uuid, DbError> {
         // Attempt to parse entity id
         let question_id: Uuid = question_id.try_into().map_err(|e| DbError::InvalidUuid(e))?;
-        match sqlx::query("DELETE FROM questions WHERE id = $1")
+        let mut tx = self.pool.begin().await.map_err(|e| DbError::Access(e))?;
+        // Ensure that a record with the given id exists
+        sqlx::query("SELECT * FROM questions WHERE id = $1")
             .bind(question_id)
-            .execute(&self.pool)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| DbError::NotFound(e))?;
+        // Now attempt to delete the record, and commit the changes if successful
+        match sqlx::query("DELETE FROM questions WHERE id = $1 RETURNING id")
+            .bind(question_id)
+            .map(|row: PgRow| row.get("id"))
+            .fetch_one(&mut *tx)
             .await
             .map_err(|e| DbError::Deletion(e))
         {
-            Ok(_) => Ok(question_id),
+            Ok(id) => {
+                // Commit the transaction
+                tx.commit().await.map_err(|e| DbError::Access(e))?;
+                Ok(id)
+            },
             Err(e) => Err(e)
         }
     }
