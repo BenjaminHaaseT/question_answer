@@ -1,5 +1,6 @@
 //! Contains the structs that model the databases.
 
+use std::fmt::Display;
 use std::convert::TryInto;
 use serde::{Serialize, Deserialize};
 use sqlx::types::Uuid;
@@ -7,7 +8,7 @@ use sqlx::FromRow;
 // use sqlx::uuid
 use sqlx::error::Error;
 use chrono::{DateTime, Utc};
-
+use serde_json::ser::Formatter;
 
 
 pub mod prelude {
@@ -110,8 +111,7 @@ impl TryInto<Uuid> for EntityId {
     }
 }
 
-
-
+#[derive(Debug)]
 pub enum DbError {
     Creation(Error),
     NotFound(Error),
@@ -122,3 +122,24 @@ pub enum DbError {
     Update(Error),
     Commit(Error),
 }
+
+impl Display for DbError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DbError::Creation(e) => write!(f, "Creation error occurred: {e}"),
+            DbError::NotFound(e) => write!(f, "Entity not found in database: {e}"),
+            DbError::InvalidUuid(s) => write!(f, "Invalid Uuid error: {s}"),
+            DbError::Access(e) => write!(f, "Error when accessing database: {e}"),
+            DbError::FromRow(e) => write!(f, "Error when converting entity from database row: {e}"),
+            DbError::Deletion(e) => write!(f, "Error deleting from database: {e}"),
+            DbError::Update(e) => write!(f, "Error updating database: {e}"),
+            DbError::Commit(e) => write!(f, "Error committing to database: {e}")
+        }
+    }
+}
+
+impl std::error::Error for DbError {}
+
+
+
+

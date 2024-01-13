@@ -9,6 +9,13 @@ use sqlx::types::Uuid;
 use sqlx::FromRow;
 use crate::models::prelude::*;
 
+#[cfg(test)]
+mod test;
+
+pub mod prelude {
+    pub use super::*;
+}
+
 /// The interface for any database access object that will interact with the the questions database.
 pub trait QuestionDao {
     /// # Required Method
@@ -127,6 +134,12 @@ pub trait AnswerDao {
 
 pub struct QuestionDaoImpl {
     pool: PgPool,
+}
+
+impl QuestionDaoImpl {
+    fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
 }
 
 impl QuestionDao for QuestionDaoImpl {
