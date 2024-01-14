@@ -228,18 +228,41 @@ pub struct AnswerDaoImpl {
     pool: PgPool,
 }
 
+impl AnswerDaoImpl {
+    fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
 impl AnswerDao for AnswerDaoImpl {
     async fn create_answer(&self, new_answer: NewAnswer) -> Result<Uuid, DbError> {
         // First parse question_id
         let question_id: Uuid = Uuid::parse_str(new_answer.question_id.as_str()).map_err(|_| DbError::InvalidUuid("invalid uuid"))?;
-        // Attempt to insert a new answer into the database
-        sqlx::query("INSERT INTO answers (question_id, answer) VALUES ($1, $2) returning id")
+        // Get a transaction
+        let mut tx = self.pool.begin().await.map_err(|e| DbError::Access(e))?;
+        // Ensure that the associated question actually exists
+        sqlx::query("SELECT * FROM questions WHERE id = $1")
+            .bind(question_id)
+            .map(|_row| ())
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| DbError::NotFound(e))?;
+        // If we make it to this line, we know the associated question exists in the database
+        match sqlx::query("INSERT INTO answers (question_id, answer) VALUES ($1, $2) returning id")
             .bind(question_id)
             .bind(new_answer.answer)
-            .map(|row| -> Uuid { row.get("id") })
-            .fetch_one(&self.pool)
+            .map(|row| row.get("id"))
+            .fetch_one(&mut *tx)
             .await
             .map_err(|e| DbError::Creation(e))
+        {
+            Ok(id) => {
+                // commit the transaction
+                tx.commit().await.map_err(|e| DbError::Access(e))?;
+                Ok(id)
+            }
+            Err(e) => Err(e)
+        }
     }
 
     async fn get_answer(&self, answer_id: EntityId) -> Result<Answer, DbError> {

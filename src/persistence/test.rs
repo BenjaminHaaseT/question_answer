@@ -157,3 +157,69 @@ mod question_tests {
         assert!(inc_res.is_ok());
     }
 }
+
+mod answer_tests {
+    use sqlx::types::Uuid;
+    use crate::models::{DbError, EntityId, NewAnswer, NewQuestion};
+    use crate::persistence::prelude::PgPool;
+    use crate::persistence::AnswerDaoImpl;
+    use crate::persistence::AnswerDao;
+    use crate::persistence::QuestionDaoImpl;
+    use crate::persistence::QuestionDao;
+
+    #[sqlx::test]
+    async fn create_answer_should_fail_with_invalid_id_err(pool: PgPool) {
+        let new_answer = NewAnswer { question_id: String::from("invalid question id"), answer: String::from("Test answer") };
+        let answer_dao = AnswerDaoImpl::new(pool);
+        let res = answer_dao.create_answer(new_answer).await;
+        println!("{:?}", res);
+        assert!(res.is_err());
+        let Err(DbError::InvalidUuid(s)) = res else { panic!("Error should be `InvalidUuid` variant") };
+    }
+
+    #[sqlx::test]
+    async fn create_answer_should_fail_with_access_err(pool: PgPool) {
+        let answer_dao = AnswerDaoImpl::new(pool.clone());
+        pool.close().await;
+        let new_answer = NewAnswer { question_id: Uuid::new_v4().to_string(), answer: String::from("Test answer") };
+        let res = answer_dao.create_answer(new_answer).await;
+        println!("{:?}", res);
+        assert!(res.is_err());
+        let Err(DbError::Access(e)) = res else { panic!("Error should be `Creation` variant") };
+    }
+
+    #[sqlx::test]
+    async fn create_answer_should_fail_with_not_found_err(pool: PgPool) {
+        let answer_dao = AnswerDaoImpl::new(pool);
+        let new_answer = NewAnswer { question_id: Uuid::new_v4().to_string(), answer: String::from("Test answer") };
+        let res = answer_dao.create_answer(new_answer).await;
+        println!("{:?}", res);
+        assert!(res.is_err());
+        let Err(DbError::NotFound(e)) = res else { panic!("Error should be `NotFound` variant.")};
+    }
+
+    #[sqlx::test]
+    async fn create_answer_should_succeed(pool: PgPool){
+        // Create Dao's for question and answer tables
+        let question_dao = QuestionDaoImpl::new(pool.clone());
+        let answer_dao = AnswerDaoImpl::new(pool);
+
+        // Insert a new test question into the question table
+        let new_question = NewQuestion { title: String::from("Test Question"), question: String::from("Hello this question is a test") };
+        let new_question_res = question_dao.create_question(new_question).await;
+        println!("{:?}", new_question_res);
+        assert!(new_question_res.is_ok());
+
+        // Get id for new answer
+        let question_id = new_question_res.unwrap().to_string();
+
+        // create new answer
+        let new_answer = NewAnswer { question_id, answer: String::from("Test answer") };
+
+        // Attempt to make the query
+        let new_answer_res = answer_dao.create_answer(new_answer).await;
+        println!("{:?}", new_answer_res);
+        assert!(new_answer_res.is_ok());
+    }
+
+}
