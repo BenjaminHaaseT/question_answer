@@ -109,3 +109,42 @@ async fn delete_question_should_fail_with_not_found(pool: PgPool) {
     assert!(del_res.is_err());
     let Err(DbError::NotFound(e)) = del_res else {panic!("error should be `Deletion`")};
 }
+
+#[sqlx::test]
+async fn delete_question_should_succeed(pool: PgPool) {
+    let question_dao = QuestionDaoImpl::new(pool);
+    // insert a question into the database
+    let new_question = NewQuestion { title: String::from("Test Question1"), question: String::from("Hello this question is a test") };
+    let new_question_id = question_dao.create_question(new_question)
+        .await;
+    println!("{:?}", new_question_id);
+    assert!(new_question_id.is_ok());
+    let new_question_id = EntityId::new(new_question_id.unwrap().to_string());
+    let deleted_question_id = question_dao.delete_question(new_question_id).await;
+    println!("{:?}", deleted_question_id);
+    assert!(deleted_question_id.is_ok());
+}
+
+#[sqlx::test]
+async fn increment_question_likes_should_fail_with_not_found(pool: PgPool) {
+    let question_dao = QuestionDaoImpl::new(pool);
+    // insert new question into database
+    let question_id = EntityId::new(Uuid::new_v4().to_string());
+    let inc_res = question_dao.increment_question_likes(question_id).await;
+    println!("{:?}", inc_res);
+    assert!(inc_res.is_err());
+    let Err(DbError::NotFound(e)) = inc_res else { panic!("Error should be `NotFound` variant") };
+}
+
+#[sqlx::test]
+async fn increment_question_likes_should_succeed(pool: PgPool) {
+    let question_dao = QuestionDaoImpl::new(pool);
+    let new_question = NewQuestion { title: String::from("Test Question1"), question: String::from("Hello this question is a test") };
+    let question_id = question_dao.create_question(new_question).await;
+    println!("{:?}", question_id);
+    assert!(question_id.is_ok());
+    let question_id = EntityId::new(question_id.unwrap().to_string());
+    let inc_res = question_dao.increment_question_likes(question_id).await;
+    println!("{:?}", inc_res);
+    assert!(inc_res.is_ok());
+}

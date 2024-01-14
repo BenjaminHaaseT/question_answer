@@ -207,16 +207,16 @@ impl QuestionDao for QuestionDaoImpl {
         let mut tx = self.pool.begin().await.map_err(|e| DbError::Access(e))?;
         let likes = sqlx::query("SELECT likes FROM questions WHERE id = $1")
             .bind(question_id)
-            .map(|row: PgRow| row.get::<i32, &str>("id"))
+            .map(|row: PgRow| row.get::<i32, &str>("likes"))
             .fetch_one(&mut *tx)
             .await
-            .map_err(|e| DbError::Access(e))?;
+            .map_err(|e| DbError::NotFound(e))?;
         match sqlx::query("UPDATE questions SET likes = $1 WHERE id = $2")
             .bind(likes + 1)
             .bind(question_id)
             .execute(&mut *tx)
             .await
-            .map_err(|e| DbError::Access(e))
+            .map_err(|e| DbError::Update(e))
         {
             Ok(_) => tx.commit().await.map_err(|e| DbError::Commit(e)),
             Err(e) => Err(e)
